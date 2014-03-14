@@ -140,6 +140,14 @@ class VideoBackend(object):
     def title(self):
         return self.get_title()
 
+    @cached_property
+    def description(self):
+        return self.get_description()
+
+    @cached_property
+    def author(self):
+        return self.get_author()
+
     @classmethod
     def is_valid(cls, url):
         """
@@ -186,6 +194,12 @@ class VideoBackend(object):
     def get_title(self):
         raise NotImplementedError
 
+    def get_description(self):
+        raise NotImplementedError
+
+    def get_author(self):
+        raise NotImplementedError
+
 class YoutubeBackend(VideoBackend):
     """
     Backend for YouTube URLs.
@@ -220,8 +234,12 @@ class YoutubeBackend(VideoBackend):
     def get_title(self):
         return self.metadata['entry']['title']['$t']
 
-    def get_info(self):
+    def get_description(self):
         return self.metadata['entry']['media$group']['media$description']['$t']
+
+    def get_author(self):
+        authors = self.metadata['entry']['author']
+        return ", ".join([author['name']['$t'] for author in authors])
 
     def get_code(self):
         code = super(YoutubeBackend, self).get_code()
@@ -248,15 +266,23 @@ class VimeoBackend(VideoBackend):
     pattern_url = '{protocol}://player.vimeo.com/video/{code}'
     pattern_info = '{protocol}://vimeo.com/api/v2/video/{code}.json'
 
+    def __init__(self, *args, **kwargs):
+        super(VimeoBackend, self).__init__(*args, **kwargs)
+        url = self.pattern_info.format(code=self.code, protocol=self.protocol)
+
+        self.metadata = json.loads(urllib.urlopen(url).read())[0]
+
     def get_info(self):
-        try:
-            response = requests.get(
-                self.pattern_info.format(code=self.code, protocol=self.protocol),
-                timeout=EMBED_VIDEO_TIMEOUT
-            )
-            return json.loads(response.text)[0]
-        except ValueError:
-            raise VideoDoesntExistException()
+        return self.metadata
+
+    def get_title(self):
+        return self.metadata['title']
+
+    def get_description(self):
+        return self.metadata['description']
+
+    def get_author(self):
+        return self.metadata['user_name']
 
     def get_thumbnail_url(self):
         return self.info.get('thumbnail_large')
@@ -272,6 +298,11 @@ class SoundCloudBackend(VideoBackend):
     re_code = re.compile(r'src=".*%2F(?P<code>\d+)&show_artwork.*"', re.I)
     re_url = re.compile(r'src="(?P<url>.*?)"', re.I)
 
+    def __init__(self,*args, **kwargs):
+        super(SoundCloudBackend, self).__init__(*args, **kwargs)
+        data = 'format=json&url=%s' % self._url
+        self.metadata = json.loads(urllib.urlopen(self.base_url, data).read())
+
     @cached_property
     def width(self):
         return self.info.get('width')
@@ -281,17 +312,19 @@ class SoundCloudBackend(VideoBackend):
         return self.info.get('height')
 
     def get_info(self):
-        params = {
-            'format': 'json',
-            'url': self._url,
-        }
-        r = requests.get(self.base_url, data=params,
-                         timeout=EMBED_VIDEO_TIMEOUT)
-
-        return json.loads(r.text)
+        return self.metadata
 
     def get_thumbnail_url(self):
         return self.info.get('thumbnail_url')
+
+    def get_title(self):
+        return self.metadata['title']
+
+    def get_description(self):
+        return self.metadata['description']
+
+    def get_author(self):
+        return self.metadata['author_name']
 
     def get_url(self):
         match = self.re_url.search(self.info.get('html'))
