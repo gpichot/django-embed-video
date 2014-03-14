@@ -1,6 +1,7 @@
 import re
 import requests
 import json
+import urllib
 
 try:
     import urlparse
@@ -135,6 +136,10 @@ class VideoBackend(object):
     def info(self):
         return self.get_info()
 
+    @cached_property
+    def title(self):
+        return self.get_title()
+
     @classmethod
     def is_valid(cls, url):
         """
@@ -178,6 +183,8 @@ class VideoBackend(object):
     def get_info(self):
         raise NotImplementedError
 
+    def get_title(self):
+        raise NotImplementedError
 
 class YoutubeBackend(VideoBackend):
     """
@@ -200,8 +207,21 @@ class YoutubeBackend(VideoBackend):
         re.I | re.X
     )
 
+    youtube_api_url = 'http://gdata.youtube.com/feeds/api/videos/%s?alt=json&v=2'
+
     pattern_url = '{protocol}://www.youtube.com/embed/{code}?wmode=opaque'
     pattern_thumbnail_url = '{protocol}://img.youtube.com/vi/{code}/hqdefault.jpg'
+
+    def __init__(self, *args, **kwargs):
+        super(YoutubeBackend, self).__init__(*args, **kwargs)
+        data = urllib.urlopen(self.youtube_api_url % self.get_code()).read()
+        self.metadata = json.loads(data)
+
+    def get_title(self):
+        return self.metadata['entry']['title']['$t']
+
+    def get_info(self):
+        return self.metadata['entry']['media$group']['media$description']['$t']
 
     def get_code(self):
         code = super(YoutubeBackend, self).get_code()
