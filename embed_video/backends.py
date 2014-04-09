@@ -178,15 +178,16 @@ class VideoBackend(object):
         return self.pattern_thumbnail_url.format(code=self.code,
                                                  protocol=self.protocol)
 
-    def get_embed_code(self, width, height):
+    def get_embed_code(self, width=640, height=360):
         """
         Returns embed code rendered from template :py:data:`template_name`.
         """
-        return render_to_string(self.template_name, {
+        d = render_to_string(self.template_name, {
             'backend': self,
             'width': width,
             'height': height,
         })
+        return d
 
     def get_info(self):
         raise NotImplementedError
@@ -235,7 +236,7 @@ class YoutubeBackend(VideoBackend):
         return self.metadata['entry']['title']['$t']
 
     def get_description(self):
-        return self.metadata['entry']['media$group']['media$description']['$t']
+        return self.metadata['entry']['media$group']['media$description']['$t'].replace('\n', '<br />')
 
     def get_author(self):
         authors = self.metadata['entry']['author']
@@ -253,6 +254,10 @@ class YoutubeBackend(VideoBackend):
                 raise UnknownIdException
 
         return code
+    
+    def get_embed_code(self, *args, **kwargs):
+
+        return super(YoutubeBackend, self).get_embed_code(*args, **kwargs)
 
 
 class VimeoBackend(VideoBackend):
