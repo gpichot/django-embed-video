@@ -1,7 +1,8 @@
 from django import forms
 from django.utils.safestring import mark_safe
 
-from .backends import detect_backend, UnknownBackendException
+from .backends import detect_backend, UnknownBackendException, \
+    VideoDoesntExistException
 from .fields import EmbedVideoField
 
 
@@ -33,18 +34,17 @@ class AdminVideoWidget(forms.TextInput):
     def render(self, name, value='', attrs=None, size=(420, 315)):
         output = super(AdminVideoWidget, self).render(name, value, attrs)
 
-        if value:
-            try:
-                backend = detect_backend(value)
-            except UnknownBackendException:
-                pass
-            else:
-                output = self.output_format.format(
-                    video=backend.get_embed_code(*size),
-                    input=output,
-                )
+        if not value:
+            return output
 
-        return mark_safe(output)
+        try:
+            backend = detect_backend(value)
+            return mark_safe(self.output_format.format(
+                video=backend.get_embed_code(*size),
+                input=output,
+            ))
+        except (UnknownBackendException, VideoDoesntExistException):
+            return output
 
 
 class AdminVideoMixin(object):
